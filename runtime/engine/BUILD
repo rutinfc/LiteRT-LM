@@ -154,6 +154,7 @@ cc_library(
         "//runtime/components/constrained_decoding:llg_constraint_config",
         "//runtime/conversation",
         "//runtime/conversation:io_types",
+        "//runtime/conversation/model_data_processor:gemma4_data_processor_config",
         "//runtime/executor:executor_settings_base",
         "//runtime/executor:llm_executor_settings",
         "//runtime/proto:sampler_params_cc_proto",

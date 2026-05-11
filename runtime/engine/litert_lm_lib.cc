@@ -53,6 +53,7 @@
 #include "runtime/components/tokenizer.h"
 #include "runtime/conversation/conversation.h"
 #include "runtime/conversation/io_types.h"
+#include "runtime/conversation/model_data_processor/gemma4_data_processor_config.h"
 #include "runtime/engine/engine.h"
 #include "runtime/engine/engine_factory.h"
 #include "runtime/engine/engine_settings.h"
@@ -216,6 +217,13 @@ absl::StatusOr<Message> RunSingleTurnConversation(
   if (settings.max_output_tokens > 0) {
     optional_args.max_output_tokens = settings.max_output_tokens;
   }
+  if (settings.visual_token_budget > 0 && conversation->GetConfig()
+                                              .GetSessionConfig()
+                                              .GetLlmModelType()
+                                              .has_gemma4()) {
+    optional_args.args = Gemma4DataProcessorArguments{
+        .visual_token_budget = settings.visual_token_budget};
+  }
 
   // Skip printing the output when using fake prefill tokens.
   bool should_print_output = settings.benchmark_prefill_tokens == 0;
@@ -270,6 +278,13 @@ absl::Status RunMultiTurnConversation(const LiteRtLmSettings& settings,
     OptionalArgs optional_args;
     if (settings.max_output_tokens > 0) {
       optional_args.max_output_tokens = settings.max_output_tokens;
+    }
+    if (settings.visual_token_budget > 0 && conversation->GetConfig()
+                                                .GetSessionConfig()
+                                                .GetLlmModelType()
+                                                .has_gemma4()) {
+      optional_args.args = Gemma4DataProcessorArguments{
+          .visual_token_budget = settings.visual_token_budget};
     }
 
     if (settings.async) {

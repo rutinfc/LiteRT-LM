@@ -79,6 +79,7 @@ struct LiteRtLmSettings {
   int max_num_tokens = 0;
   int max_output_tokens = -1;
   int max_num_images = 0;
+  int visual_token_budget = -1;
   absl::LogSeverity min_log_level = absl::LogSeverity::kInfo;
   std::set<int> prefill_batch_sizes;
   int num_output_candidates = 1;
