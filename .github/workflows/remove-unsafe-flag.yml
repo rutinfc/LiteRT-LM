@@ -1,0 +1,114 @@
+# Copyright 2026 The ODML Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: "Remove Unsafe Flag"
+
+on:
+  schedule:
+    - cron: '0 16 * * *'  # 매일 KST 새벽 1시 (UTC 16:00)
+  workflow_dispatch:
+
+jobs:
+  remove-unsafe-flag:
+    name: "Remove unsafeFlags from Package.swift and retag"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-tags: true
+          fetch-depth: 0
+
+      - name: Get latest version tag
+        id: get_tag
+        run: |
+          LATEST_TAG=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+' | head -1)
+          if [ -z "$LATEST_TAG" ]; then
+            echo "No version tag found. Exiting."
+            exit 1
+          fi
+          echo "tag=$LATEST_TAG" >> "$GITHUB_OUTPUT"
+          echo "Latest tag: $LATEST_TAG"
+
+      - name: Check if re-tag already exists
+        id: check_retag
+        run: |
+          RETAG="${{ steps.get_tag.outputs.tag }}-re"
+          if git tag | grep -qx "$RETAG"; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Re-tag $RETAG already exists. Skipping."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if unsafeFlags exists in Package.swift
+        id: check_flag
+        if: steps.check_retag.outputs.exists == 'false'
+        run: |
+          if grep -q "unsafeFlags" Package.swift; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            echo "unsafeFlags found in Package.swift"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "No unsafeFlags in Package.swift. Skipping."
+          fi
+
+      - name: Remove unsafeFlags from Package.swift
+        if: steps.check_retag.outputs.exists == 'false' && steps.check_flag.outputs.found == 'true'
+        run: |
+          python3 - <<'EOF'
+          import re
+
+          with open("Package.swift", "r") as f:
+              content = f.read()
+
+          # linkerSettings 블록 전체 제거 (unsafeFlags 포함 시)
+          pattern = r',?\s*\n\s*linkerSettings:\s*\[\s*\n\s*\.unsafeFlags\([^\]]*\)\s*\n\s*\]'
+          cleaned = re.sub(pattern, '', content)
+
+          with open("Package.swift", "w") as f:
+              f.write(cleaned)
+
+          print("Removed unsafeFlags from Package.swift")
+          EOF
+
+      - name: Verify Package.swift changed
+        if: steps.check_retag.outputs.exists == 'false' && steps.check_flag.outputs.found == 'true'
+        run: |
+          if grep -q "unsafeFlags" Package.swift; then
+            echo "ERROR: unsafeFlags still present in Package.swift"
+            exit 1
+          fi
+          echo "Package.swift is clean."
+
+      - name: Commit and create new tag
+        if: steps.check_retag.outputs.exists == 'false' && steps.check_flag.outputs.found == 'true'
+        run: |
+          LATEST_TAG="${{ steps.get_tag.outputs.tag }}"
+          RETAG="${LATEST_TAG}-re"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add Package.swift
+          git commit -m "[swift] Remove unsafeFlags from Package.swift for ${LATEST_TAG}"
+
+          git tag "$RETAG"
+          git push origin HEAD
+          git push origin "$RETAG"
+
+          echo "Created and pushed tag: $RETAG"
