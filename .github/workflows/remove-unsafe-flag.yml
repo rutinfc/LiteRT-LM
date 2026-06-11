@@ -77,8 +77,10 @@ jobs:
               content = f.read()
 
           # linkerSettings 블록 전체 제거 (unsafeFlags 포함 시)
-          pattern = r',?\s*\n\s*linkerSettings:\s*\[\s*\n\s*\.unsafeFlags\([^\]]*\)\s*\n\s*\]'
-          cleaned = re.sub(pattern, '', content)
+          # .unsafeFlags(["-Xlinker", "-all_load"]) 처럼 인자 안에 대괄호가 있으므로
+          # [^\]]* 대신 비탐욕 매칭(.*?)을 사용한다.
+          pattern = r',?\s*\n\s*linkerSettings:\s*\[\s*\.unsafeFlags\(.*?\)\s*,?\s*\]'
+          cleaned = re.sub(pattern, '', content, flags=re.DOTALL)
 
           with open("Package.swift", "w") as f:
               f.write(cleaned)
